@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neural Network Drawing Lab</title>
+  <style>
+    :root { --ink:#1e293b; --muted:#64748b; --paper:#f8fafc; --panel:#fff; --line:#dbe4ee; --blue:#2563eb; --violet:#7c3aed; --green:#16a34a; --orange:#f97316; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); font:14px/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:linear-gradient(135deg,#f8fbff 0%,#f6f4ff 100%); }
+    header { padding:28px clamp(20px,4vw,58px) 21px; background:#fff; border-bottom:1px solid var(--line); }
+    h1 { margin:0; font-size:clamp(24px,3vw,34px); letter-spacing:-.04em; }
+    header p { margin:7px 0 0; color:var(--muted); font-size:15px; }
+    main { padding:24px clamp(16px,3vw,48px) 42px; }
+    .controls { display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; margin:0 auto 20px; max-width:1780px; }
+    button { appearance:none; border:0; border-radius:9px; padding:10px 15px; background:var(--blue); color:white; font-weight:700; cursor:pointer; box-shadow:0 2px 7px #2563eb33; transition:.18s transform,.18s opacity,.18s background; }
+    button:hover:not(:disabled) { transform:translateY(-1px); background:#1d4ed8; }
+    button:disabled { opacity:.45; cursor:not-allowed; box-shadow:none; }
+    .secondary { color:#334155; background:#e9eef5; box-shadow:none; }
+    .secondary:hover:not(:disabled) { background:#dce5ef; }
+    .hint { color:var(--muted); font-size:13px; }
+    .flow-wrap { overflow-x:auto; padding:10px 4px 22px; }
+    .flow { min-width:1660px; max-width:1780px; margin:auto; display:grid; grid-template-columns:230px 185px 195px 225px 190px 190px 170px 225px; gap:18px; align-items:stretch; }
+    .stage { position:relative; min-height:484px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:15px; box-shadow:0 8px 23px #1e293b0a; }
+    .stage:not(:last-child)::after { content:"→"; position:absolute; right:-18px; top:48%; z-index:2; width:18px; transform:translateY(-50%); color:#94a3b8; text-align:center; font-size:22px; font-weight:300; }
+    .stage.backward:not(:first-child)::before { content:"←"; position:absolute; left:-18px; top:54%; z-index:3; width:18px; transform:translateY(-50%); color:var(--orange); text-align:center; font-size:21px; font-weight:bold; opacity:0; }
+    .stage.backward.flash-back::before { opacity:1; animation:flash .8s ease; }
+    .eyebrow { color:#64748b; text-transform:uppercase; letter-spacing:.1em; font-weight:800; font-size:10px; }
+    h2 { margin:2px 0 13px; font-size:16px; letter-spacing:-.02em; }
+    .drawing { display:block; width:200px; height:200px; border:2px solid #334155; border-radius:5px; background:white; cursor:crosshair; touch-action:none; }
+    .label-choice { display:flex; gap:8px; margin:13px 0 9px; }
+    .choice { flex:1; padding:8px 5px; border:1px solid var(--line); border-radius:7px; text-align:center; cursor:pointer; font-weight:700; }
+    .choice:has(input:checked) { background:#eff6ff; border-color:#60a5fa; color:#1d4ed8; }
+    input { accent-color:var(--blue); }
+    .mini { color:var(--muted); font-size:12px; }
+    .pixels { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin-top:20px; }
+    .pixel { aspect-ratio:1; display:grid; place-items:center; border:1px solid #d7e0ea; border-radius:5px; color:#475569; font-size:11px; font-weight:700; transition:background .28s,color .28s,transform .28s; }
+    .pixel.hot { transform:scale(1.04); }
+    .vector { display:flex; flex-direction:column; gap:9px; margin-top:22px; }
+    .node { position:relative; display:flex; gap:8px; align-items:center; min-height:34px; padding:5px 7px; border:1px solid #d8e1eb; border-radius:8px; background:#fff; transition:.3s; }
+    .node b { display:grid; flex:0 0 24px; height:24px; place-items:center; border-radius:50%; background:#e0e7ff; color:#4338ca; font-size:11px; }
+    .node .value { margin-left:auto; color:#475569; font:700 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .params { margin-top:13px; padding-top:10px; border-top:1px dashed #d8e1eb; color:#64748b; font:10px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space:pre-line; }
+    .params strong { color:#475569; font-family:inherit; }
+    .scores { margin-top:26px; display:flex; flex-direction:column; gap:13px; }
+    .score-row { display:grid; grid-template-columns:25px 1fr 38px; align-items:center; gap:7px; font-weight:800; }
+    .score-bar { height:32px; display:flex; align-items:center; padding-left:8px; border:1px solid #bbdfc4; border-radius:7px; color:#14532d; background:#f0fdf4; transition:.35s background; }
+    .truth { margin-top:26px; display:flex; flex-direction:column; gap:13px; }
+    .truth-row { display:flex; align-items:center; gap:9px; font-weight:800; }
+    .truth-box { width:42px; height:32px; display:grid; place-items:center; border-radius:6px; border:1px solid #bbdfc4; color:#14532d; transition:.3s background; }
+    .loss { margin-top:23px; padding:15px; border-radius:10px; background:#fff7ed; border:1px solid #fed7aa; }
+    .loss-value { margin:2px 0 7px; font:800 30px ui-monospace, SFMono-Regular, Menlo, monospace; color:#c2410c; letter-spacing:-.07em; }
+    .batch { margin:13px 0; padding:10px; background:#f8fafc; border-radius:8px; border:1px solid var(--line); }
+    .batch-dots { display:flex; gap:5px; margin-top:7px; }
+    .batch-dot { width:20px; height:8px; background:#e2e8f0; border-radius:99px; transition:.2s; }
+    .batch-dot.filled { background:#60a5fa; }
+    .log { margin-top:14px; color:#64748b; font-size:12px; min-height:34px; }
+    .active { border-color:#60a5fa !important; box-shadow:0 0 0 3px #60a5fa2b, 0 7px 18px #2563eb12; animation:flash .8s ease; }
+    .flash-back { border-color:#fb923c !important; box-shadow:0 0 0 3px #fb923c33, 0 7px 18px #f9731612; animation:flash .8s ease; }
+    @keyframes flash { 0% { transform:scale(1); } 35% { transform:scale(1.025); } 100% { transform:scale(1); } }
+    .legend { max-width:1780px; margin:auto; display:flex; gap:20px; color:#64748b; font-size:12px; }
+    .legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; background:#60a5fa; } .legend i.back { background:#fb923c; }
+    @media (max-width:700px) { header { padding-top:20px; } .drawing { width:100%; height:auto; aspect-ratio:1; } }
+  </style>
+</head>
+<body>
+  <header><h1>Neural Network Drawing Lab</h1><p>Draw a thick <b>O</b> or <b>×</b>, then watch the picture become numbers, a prediction, and a learning signal.</p></header>
+  <main>
+    <div class="controls"><button id="predict">Predict →</button><button class="secondary" id="clear">Clear drawing</button><span class="hint">Each prediction joins the mini-batch. Run backpropagation whenever you are ready.</span></div>
+    <div class="flow-wrap"><section class="flow">
+      <article class="stage" id="draw-stage"><div class="eyebrow">Step 1</div><h2>Draw + label</h2><canvas class="drawing" id="canvas" width="200" height="200" aria-label="Drawing canvas"></canvas><div class="label-choice"><label class="choice"><input type="radio" name="label" value="0" checked> O</label><label class="choice"><input type="radio" name="label" value="1"> ×</label></div><p class="mini">Use a thick stroke. The label tells the network the correct answer.</p></article>
+      <article class="stage" id="grid-stage"><div class="eyebrow">Step 2</div><h2>3 × 3 image</h2><p class="mini">Each square is one “huge pixel”.</p><div class="pixels" id="pixels"></div></article>
+      <article class="stage" id="input-stage"><div class="eyebrow">Step 3</div><h2>Input layer</h2><p class="mini">Fraction of black ink in each image segment.</p><div class="vector" id="inputs"></div></article>
+      <article class="stage" id="hidden1-stage"><div class="eyebrow">Step 4</div><h2>Hidden layer · 6</h2><div class="vector" id="hidden1"></div><div class="params" id="params1"></div></article>
+      <article class="stage" id="hidden2-stage"><div class="eyebrow">Step 5</div><h2>Hidden layer · 3</h2><div class="vector" id="hidden2"></div><div class="params" id="params2"></div></article>
+      <article class="stage" id="output-stage"><div class="eyebrow">Step 6</div><h2>Prediction</h2><p class="mini">Green intensity = confidence.</p><div class="scores" id="scores"></div><div class="params" id="params3"></div></article>
+      <article class="stage" id="truth-stage"><div class="eyebrow">Step 7</div><h2>True label</h2><p class="mini">One-hot encoded answer.</p><div class="truth" id="truth"></div></article>
+      <article class="stage" id="loss-stage"><div class="eyebrow">Step 8</div><h2>Loss + learning</h2><div class="loss"><div class="mini">Current example loss</div><div class="loss-value" id="loss">—</div><div class="mini">Cross-entropy loss</div></div><div class="batch"><b>Mini-batch: <span id="batch-count">0</span> examples</b><div class="batch-dots" id="batch-dots"></div><div class="mini" id="batch-loss">Average loss: —</div></div><button id="backprop" disabled>← Backpropagate batch</button><div class="log" id="log">Draw a symbol, select its label, and predict.</div></article>
+    </section></div>
+    <div class="legend"><span><i></i>forward calculation</span><span><i class="back"></i>backpropagation and parameter update</span></div>
+  </main>
+  <script>
+    const $ = id => id.startsWith('input[') ? document.querySelector(id) : document.getElementById(id), sleep = ms => new Promise(r => setTimeout(r, ms));
+    const canvas = $('canvas'), ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white'; ctx.fillRect(0,0,200,200); ctx.strokeStyle='#111827'; ctx.lineWidth=16; ctx.lineCap='round'; ctx.lineJoin='round';
+    let drawing=false, last, batch=[];
+    const rnd = (a,b) => a + (b-a)*Math.random();
+    const network = { w1:Array.from({length:6},()=>Array.from({length:9},()=>rnd(-.8,.8))), b1:Array.from({length:6},()=>rnd(-.25,.25)), w2:Array.from({length:3},()=>Array.from({length:6},()=>rnd(-.8,.8))), b2:Array.from({length:3},()=>rnd(-.25,.25)), w3:Array.from({length:2},()=>Array.from({length:3},()=>rnd(-.8,.8))), b3:Array.from({length:2},()=>rnd(-.25,.25)) };
+    const relu=x=>Math.max(0,x), sigmoid=x=>1/(1+Math.exp(-x));
+    function softmax(a){ const m=Math.max(...a), e=a.map(x=>Math.exp(x-m)), s=e[0]+e[1]; return e.map(x=>x/s); }
+    function dot(w,x,b){ return w.reduce((s,v,i)=>s+v*x[i],b); }
+    function clear(){ ctx.fillStyle='white';ctx.fillRect(0,0,200,200); updateVisual(Array(9).fill(0)); $('loss').textContent='—'; }
+    function point(e){ const r=canvas.getBoundingClientRect(), p=e.touches?e.touches[0]:e; return {x:(p.clientX-r.left)*200/r.width,y:(p.clientY-r.top)*200/r.height}; }
+    function start(e){ drawing=true; last=point(e); e.preventDefault(); } function move(e){ if(!drawing)return; const p=point(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p;e.preventDefault(); } function stop(){drawing=false;}
+    ['pointerdown','pointermove','pointerup','pointerleave'].forEach((n,i)=>canvas.addEventListener(n,[start,move,stop,stop][i]));
+    function imageFeatures(){ const data=ctx.getImageData(0,0,200,200).data, out=[]; for(let gy=0;gy<3;gy++) for(let gx=0;gx<3;gx++){let ink=0,total=0;for(let y=Math.floor(gy*200/3);y<Math.floor((gy+1)*200/3);y++)for(let x=Math.floor(gx*200/3);x<Math.floor((gx+1)*200/3);x++){ const k=(y*200+x)*4; ink+=(255-data[k])/255; total++;}out.push(ink/total);}return out; }
+    function cell(label,value){return `<div class="node"><b>${label}</b><span class="value">${value}</span></div>`;}
+    function updateVisual(x, h1=[], h2=[], p=[]){
+      $('pixels').innerHTML=x.map((v,i)=>`<div class="pixel" style="background:rgb(${Math.round(255*(1-v))},${Math.round(255*(1-v))},${Math.round(255*(1-v))})">${(v*100).toFixed(0)}%</div>`).join('');
+      $('inputs').innerHTML=x.map((v,i)=>cell(i+1,v.toFixed(2))).join('');
+      $('hidden1').innerHTML=h1.map((v,i)=>cell(i+1,v.toFixed(2))).join(''); $('hidden2').innerHTML=h2.map((v,i)=>cell(i+1,v.toFixed(2))).join('');
+      $('scores').innerHTML=['O','×'].map((n,i)=>`<div class="score-row"><span>${n}</span><div class="score-bar" style="background:rgba(34,197,94,${.08+.82*(p[i]||0)})">${p[i]!==undefined?(p[i]*100).toFixed(1)+'%':''}</div><span>${p[i]!==undefined?p[i].toFixed(2):'—'}</span></div>`).join('');
+      const y=+$('input[name=label]:checked').value; $('truth').innerHTML=['O','×'].map((n,i)=>`<div class="truth-row"><span>${n}</span><div class="truth-box" style="background:rgba(34,197,94,${i===y?.82:.08})">${i===y?1:0}</div></div>`).join('');
+      $('params1').innerHTML='<strong>weights + bias</strong>\n'+network.w1.map((w,i)=>`h${i+1}: [${w.slice(0,3).map(v=>v.toFixed(2)).join(', ')} …]  b=${network.b1[i].toFixed(2)}`).join('\n');
+      $('params2').innerHTML='<strong>weights + bias</strong>\n'+network.w2.map((w,i)=>`h${i+1}: [${w.map(v=>v.toFixed(2)).join(', ')}]  b=${network.b2[i].toFixed(2)}`).join('\n');
+      $('params3').innerHTML='<strong>weights + bias</strong>\n'+network.w3.map((w,i)=>`${i?'×':'O'}: [${w.map(v=>v.toFixed(2)).join(', ')}]  b=${network.b3[i].toFixed(2)}`).join('\n');
+    }
+    function stage(id, back=false){ const e=$(id);e.classList.remove('active','flash-back');void e.offsetWidth;e.classList.add(back?'flash-back':'active');setTimeout(()=>e.classList.remove(back?'flash-back':'active'),850); }
+    function updateBatch(){ $('batch-count').textContent=batch.length; $('batch-dots').innerHTML=Array.from({length:Math.max(3,batch.length)},(_,i)=>`<i class="batch-dot ${i<batch.length?'filled':''}"></i>`).join(''); $('batch-loss').textContent='Average loss: '+(batch.length?(batch.reduce((s,b)=>s+b.loss,0)/batch.length).toFixed(3):'—'); $('backprop').disabled=!batch.length; }
+    async function predict(){ $('predict').disabled=true; $('log').textContent='Measuring ink in nine regions…'; const x=imageFeatures(); updateVisual(x); stage('draw-stage'); await sleep(500);stage('grid-stage');await sleep(520);stage('input-stage');
+      const z1=network.w1.map((w,i)=>dot(w,x,network.b1[i])), h1=z1.map(relu); updateVisual(x,h1);await sleep(540);stage('hidden1-stage');
+      const z2=network.w2.map((w,i)=>dot(w,h1,network.b2[i])), h2=z2.map(relu); updateVisual(x,h1,h2);await sleep(540);stage('hidden2-stage');
+      const z3=network.w3.map((w,i)=>dot(w,h2,network.b3[i])), p=softmax(z3); updateVisual(x,h1,h2,p);await sleep(540);stage('output-stage');await sleep(350);stage('truth-stage');
+      const y=+$('input[name=label]:checked').value, loss=-Math.log(Math.max(p[y],1e-8)); $('loss').textContent=loss.toFixed(3);stage('loss-stage'); batch.push({x,h1,h2,p,y,loss}); updateBatch();$('log').textContent=`Example added to the mini-batch (${batch.length}).`; $('predict').disabled=false;
+    }
+    async function backprop(){ $('backprop').disabled=true;$('predict').disabled=true;$('log').textContent=`Backpropagating average error from ${batch.length} example${batch.length===1?'':'s'}…`; stage('loss-stage',true); await sleep(550); const g={w3:network.w3.map(r=>r.map(()=>0)),b3:[0,0],w2:network.w2.map(r=>r.map(()=>0)),b2:[0,0,0],w1:network.w1.map(r=>r.map(()=>0)),b1:Array(6).fill(0)};
+      for(const ex of batch){ const dz3=ex.p.map((v,i)=>v-(i===ex.y?1:0)); for(let i=0;i<2;i++){g.b3[i]+=dz3[i];for(let j=0;j<3;j++)g.w3[i][j]+=dz3[i]*ex.h2[j];} const dh2=ex.h2.map((v,j)=>network.w3.reduce((s,w,i)=>s+w[j]*dz3[i],0));const dz2=dh2.map((v,i)=>ex.h2[i]>0?v:0);for(let i=0;i<3;i++){g.b2[i]+=dz2[i];for(let j=0;j<6;j++)g.w2[i][j]+=dz2[i]*ex.h1[j];}const dh1=ex.h1.map((v,j)=>network.w2.reduce((s,w,i)=>s+w[j]*dz2[i],0));const dz1=dh1.map((v,i)=>ex.h1[i]>0?v:0);for(let i=0;i<6;i++){g.b1[i]+=dz1[i];for(let j=0;j<9;j++)g.w1[i][j]+=dz1[i]*ex.x[j];}}
+      const rate=.32/batch.length; function apply(W,G){W.forEach((r,i)=>r.forEach((v,j)=>W[i][j]-=rate*G[i][j]));} apply(network.w3,g.w3);network.b3.forEach((v,i)=>network.b3[i]-=rate*g.b3[i]);stage('output-stage',true);updateVisual(batch.at(-1).x,batch.at(-1).h1,batch.at(-1).h2,batch.at(-1).p);await sleep(600);apply(network.w2,g.w2);network.b2.forEach((v,i)=>network.b2[i]-=rate*g.b2[i]);stage('hidden2-stage',true);updateVisual(batch.at(-1).x,batch.at(-1).h1,batch.at(-1).h2,batch.at(-1).p);await sleep(600);apply(network.w1,g.w1);network.b1.forEach((v,i)=>network.b1[i]-=rate*g.b1[i]);stage('hidden1-stage',true);updateVisual(batch.at(-1).x,batch.at(-1).h1,batch.at(-1).h2,batch.at(-1).p);await sleep(600);stage('input-stage',true);await sleep(400);batch=[];updateBatch();$('log').textContent='Parameters updated. Draw and predict another example.';$('predict').disabled=false; }
+    $('predict').onclick=predict;$('backprop').onclick=backprop;$('clear').onclick=clear;document.querySelectorAll('input[name=label]').forEach(i=>i.onchange=()=>updateVisual(imageFeatures()));clear();updateBatch();
+  </script>
+</body></html>
