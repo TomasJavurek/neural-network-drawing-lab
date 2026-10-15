@@ -61,61 +61,210 @@
     .legend { max-width:1780px; margin:auto; display:flex; gap:20px; color:#64748b; font-size:12px; }
     .legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; background:#60a5fa; } .legend i.back { background:#fb923c; }
     @media (max-width:700px) { header { padding-top:20px; } .drawing { width:100%; height:auto; aspect-ratio:1; } }
+
+    .flow { position:relative; min-width:1736px; }
+    #connections { position:absolute; top:0; left:0; pointer-events:none; z-index:1; overflow:visible; }
+    .connection { opacity:.24; pointer-events:stroke; }
+    .connection:hover { opacity:1; }
+    .connection.signal-forward { opacity:.9; stroke:#2563eb; stroke-dasharray:10 6; animation:travel .6s linear infinite; }
+    .connection.signal-back { opacity:1; stroke:#f97316; stroke-dasharray:10 6; animation:travel .6s linear infinite reverse; }
+    @keyframes travel { to { stroke-dashoffset:-32; } }
+    .vector,.scores { height:370px; margin-top:24px; justify-content:space-around; position:relative; z-index:2; }
+    #inputs,#hidden1,#hidden2 { align-items:center; }
+    .node { width:85px; flex-shrink:0; }
+    .score-row { grid-template-columns:18px 1fr; background:white; border-radius:8px; }
+    .stage.active,.stage.flash-back { animation:none; }
+    #input-stage::after,#hidden1-stage::after,#hidden2-stage::after { display:none; }
+    .parameters { max-width:1780px; margin:24px auto; display:grid; gap:16px; }
+    .params { margin:0; background:white; border:1px solid var(--line); padding:16px; border-radius:12px; white-space:normal; font-size:12px; }
+    .table-scroll { overflow-x:auto; margin-top:10px; }
+    table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
+    th,td { text-align:right; border-bottom:1px solid var(--line); padding:8px; min-width:75px; }
+    td small { display:block; color:#9a3412; font-size:10px; }
+    td.changed { background:#fff7ed; animation:parameter-fade 2s ease; }
+    @keyframes parameter-fade { from { background:#fdba74; } to { background:#fff7ed; } }
+    #lr { width:85px; padding:7px; border:1px solid var(--line); border-radius:6px; }
+    #training-result { max-width:1780px; margin:20px auto; padding:14px; background:#fff7ed; border-radius:8px; }
+    .legend { flex-wrap:wrap; }
+
   </style>
 </head>
 <body>
   <header><h1>Neural Network Drawing Lab</h1><p>Draw a thick <b>O</b> or <b>×</b>, then watch the picture become numbers, a prediction, and a learning signal.</p></header>
   <main>
-    <div class="controls"><button id="predict">Predict →</button><button class="secondary" id="clear">Clear drawing</button><span class="hint">Each prediction joins the mini-batch. Run backpropagation whenever you are ready.</span></div>
-    <div class="flow-wrap"><section class="flow">
+    <div class="controls"><button id="predict">Predict →</button><button class="secondary" id="clear">Clear drawing</button><label>Learning rate (η) <input id="lr" type="number" min="0.0001" max="5" step="0.01" value="0.32"></label><span class="hint">Each prediction joins the mini-batch. Run backpropagation whenever you are ready.</span></div>
+    <div class="flow-wrap"><section class="flow"><svg id="connections" aria-label="Weighted connections between neurons"></svg>
       <article class="stage" id="draw-stage"><div class="eyebrow">Step 1</div><h2>Draw + label</h2><canvas class="drawing" id="canvas" width="200" height="200" aria-label="Drawing canvas"></canvas><div class="label-choice"><label class="choice"><input type="radio" name="label" value="0" checked> O</label><label class="choice"><input type="radio" name="label" value="1"> ×</label></div><p class="mini">Use a thick stroke. The label tells the network the correct answer.</p></article>
       <article class="stage" id="grid-stage"><div class="eyebrow">Step 2</div><h2>3 × 3 image</h2><p class="mini">Each square is one “huge pixel”.</p><div class="pixels" id="pixels"></div></article>
       <article class="stage" id="input-stage"><div class="eyebrow">Step 3</div><h2>Input layer</h2><p class="mini">Fraction of black ink in each image segment.</p><div class="vector" id="inputs"></div></article>
-      <article class="stage" id="hidden1-stage"><div class="eyebrow">Step 4</div><h2>Hidden layer · 6</h2><div class="vector" id="hidden1"></div><div class="params" id="params1"></div></article>
-      <article class="stage" id="hidden2-stage"><div class="eyebrow">Step 5</div><h2>Hidden layer · 3</h2><div class="vector" id="hidden2"></div><div class="params" id="params2"></div></article>
-      <article class="stage" id="output-stage"><div class="eyebrow">Step 6</div><h2>Prediction</h2><p class="mini">Green intensity = confidence.</p><div class="scores" id="scores"></div><div class="params" id="params3"></div></article>
+      <article class="stage" id="hidden1-stage"><div class="eyebrow">Step 4</div><h2>Hidden layer · 6</h2><div class="vector" id="hidden1"></div></article>
+      <article class="stage" id="hidden2-stage"><div class="eyebrow">Step 5</div><h2>Hidden layer · 3</h2><div class="vector" id="hidden2"></div></article>
+      <article class="stage" id="output-stage"><div class="eyebrow">Step 6</div><h2>Prediction</h2><p class="mini">Green intensity = confidence.</p><div class="scores" id="scores"></div></article>
       <article class="stage" id="truth-stage"><div class="eyebrow">Step 7</div><h2>True label</h2><p class="mini">One-hot encoded answer.</p><div class="truth" id="truth"></div></article>
       <article class="stage" id="loss-stage"><div class="eyebrow">Step 8</div><h2>Loss + learning</h2><div class="loss"><div class="mini">Current example loss</div><div class="loss-value" id="loss">—</div><div class="mini">Cross-entropy loss</div></div><div class="batch"><b>Mini-batch: <span id="batch-count">0</span> examples</b><div class="batch-dots" id="batch-dots"></div><div class="mini" id="batch-loss">Average loss: —</div></div><button id="backprop" disabled>← Backpropagate batch</button><div class="log" id="log">Draw a symbol, select its label, and predict.</div></article>
     </section></div>
     <div class="legend"><span><i></i>forward calculation</span><span><i class="back"></i>backpropagation and parameter update</span></div>
+    <p id="training-result" aria-live="polite">No training updates yet. Hidden layers use ReLU; output uses softmax. Training resets when you reload.</p><section class="parameters" aria-label="Network parameters"><p class="mini">Line thickness = |weight|; blue = positive, purple = negative. Hover a connection for its value. Tables: rows are destination neurons; columns are incoming neurons. Δ shows the last update. Parameter ← parameter − η × mean gradient.</p><div class="params" id="params1"></div><div class="params" id="params2"></div><div class="params" id="params3"></div></section>
   </main>
   <script>
-    const $ = id => id.startsWith('input[') ? document.querySelector(id) : document.getElementById(id), sleep = ms => new Promise(r => setTimeout(r, ms));
-    const canvas = $('canvas'), ctx = canvas.getContext('2d');
-    ctx.fillStyle = 'white'; ctx.fillRect(0,0,200,200); ctx.strokeStyle='#111827'; ctx.lineWidth=16; ctx.lineCap='round'; ctx.lineJoin='round';
-    let drawing=false, last, batch=[];
-    const rnd = (a,b) => a + (b-a)*Math.random();
-    const network = { w1:Array.from({length:6},()=>Array.from({length:9},()=>rnd(-.8,.8))), b1:Array.from({length:6},()=>rnd(-.25,.25)), w2:Array.from({length:3},()=>Array.from({length:6},()=>rnd(-.8,.8))), b2:Array.from({length:3},()=>rnd(-.25,.25)), w3:Array.from({length:2},()=>Array.from({length:3},()=>rnd(-.8,.8))), b3:Array.from({length:2},()=>rnd(-.25,.25)) };
-    const relu=x=>Math.max(0,x), sigmoid=x=>1/(1+Math.exp(-x));
-    function softmax(a){ const m=Math.max(...a), e=a.map(x=>Math.exp(x-m)), s=e[0]+e[1]; return e.map(x=>x/s); }
-    function dot(w,x,b){ return w.reduce((s,v,i)=>s+v*x[i],b); }
-    function clear(){ ctx.fillStyle='white';ctx.fillRect(0,0,200,200); updateVisual(Array(9).fill(0)); $('loss').textContent='—'; }
-    function point(e){ const r=canvas.getBoundingClientRect(), p=e.touches?e.touches[0]:e; return {x:(p.clientX-r.left)*200/r.width,y:(p.clientY-r.top)*200/r.height}; }
-    function start(e){ drawing=true; last=point(e); e.preventDefault(); } function move(e){ if(!drawing)return; const p=point(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p;e.preventDefault(); } function stop(){drawing=false;}
-    ['pointerdown','pointermove','pointerup','pointerleave'].forEach((n,i)=>canvas.addEventListener(n,[start,move,stop,stop][i]));
-    function imageFeatures(){ const data=ctx.getImageData(0,0,200,200).data, out=[]; for(let gy=0;gy<3;gy++) for(let gx=0;gx<3;gx++){let ink=0,total=0;for(let y=Math.floor(gy*200/3);y<Math.floor((gy+1)*200/3);y++)for(let x=Math.floor(gx*200/3);x<Math.floor((gx+1)*200/3);x++){ const k=(y*200+x)*4; ink+=(255-data[k])/255; total++;}out.push(ink/total);}return out; }
-    function cell(label,value){return `<div class="node"><b>${label}</b><span class="value">${value}</span></div>`;}
-    function updateVisual(x, h1=[], h2=[], p=[]){
-      $('pixels').innerHTML=x.map((v,i)=>`<div class="pixel" style="background:rgb(${Math.round(255*(1-v))},${Math.round(255*(1-v))},${Math.round(255*(1-v))})">${(v*100).toFixed(0)}%</div>`).join('');
-      $('inputs').innerHTML=x.map((v,i)=>cell(i+1,v.toFixed(2))).join('');
-      $('hidden1').innerHTML=h1.map((v,i)=>cell(i+1,v.toFixed(2))).join(''); $('hidden2').innerHTML=h2.map((v,i)=>cell(i+1,v.toFixed(2))).join('');
-      $('scores').innerHTML=['O','×'].map((n,i)=>`<div class="score-row"><span>${n}</span><div class="score-bar" style="background:rgba(34,197,94,${.08+.82*(p[i]||0)})">${p[i]!==undefined?(p[i]*100).toFixed(1)+'%':''}</div><span>${p[i]!==undefined?p[i].toFixed(2):'—'}</span></div>`).join('');
-      const y=+$('input[name=label]:checked').value; $('truth').innerHTML=['O','×'].map((n,i)=>`<div class="truth-row"><span>${n}</span><div class="truth-box" style="background:rgba(34,197,94,${i===y?.82:.08})">${i===y?1:0}</div></div>`).join('');
-      $('params1').innerHTML='<strong>weights + bias</strong>\n'+network.w1.map((w,i)=>`h${i+1}: [${w.slice(0,3).map(v=>v.toFixed(2)).join(', ')} …]  b=${network.b1[i].toFixed(2)}`).join('\n');
-      $('params2').innerHTML='<strong>weights + bias</strong>\n'+network.w2.map((w,i)=>`h${i+1}: [${w.map(v=>v.toFixed(2)).join(', ')}]  b=${network.b2[i].toFixed(2)}`).join('\n');
-      $('params3').innerHTML='<strong>weights + bias</strong>\n'+network.w3.map((w,i)=>`${i?'×':'O'}: [${w.map(v=>v.toFixed(2)).join(', ')}]  b=${network.b3[i].toFixed(2)}`).join('\n');
+
+    const $ = id => document.getElementById(id), sleep = ms => new Promise(r => setTimeout(r,ms));
+    const canvas=$('canvas'), ctx=canvas.getContext('2d');
+    let batch=[], busy=false, drawing=false, last, view=null, changes=null, updates=0;
+    const network={};
+    [ [1,9,6],[2,6,3],[3,3,2] ].forEach(([l,n,m])=>{
+      network['w'+l]=Array.from({length:m},()=>Array.from({length:n},()=>(Math.random()*2-1)*Math.sqrt(6/n)));
+      network['b'+l]=Array(m).fill(.1);
+    });
+    const label=()=>+document.querySelector('input[name=label]:checked').value;
+    const dot=(w,x,b)=>w.reduce((s,v,i)=>s+v*x[i],b);
+    function forward(x,y){
+      const h1=network.w1.map((w,i)=>Math.max(0,dot(w,x,network.b1[i])));
+      const h2=network.w2.map((w,i)=>Math.max(0,dot(w,h1,network.b2[i])));
+      const z=network.w3.map((w,i)=>dot(w,h2,network.b3[i]));
+      const m=Math.max(...z), sum=z.reduce((s,v)=>s+Math.exp(v-m),0);
+      const p=z.map(v=>Math.exp(v-m)/sum);
+      return {x,h1,h2,p,y,loss:m+Math.log(sum)-z[y]};
     }
-    function stage(id, back=false){ const e=$(id);e.classList.remove('active','flash-back');void e.offsetWidth;e.classList.add(back?'flash-back':'active');setTimeout(()=>e.classList.remove(back?'flash-back':'active'),850); }
-    function updateBatch(){ $('batch-count').textContent=batch.length; $('batch-dots').innerHTML=Array.from({length:Math.max(3,batch.length)},(_,i)=>`<i class="batch-dot ${i<batch.length?'filled':''}"></i>`).join(''); $('batch-loss').textContent='Average loss: '+(batch.length?(batch.reduce((s,b)=>s+b.loss,0)/batch.length).toFixed(3):'—'); $('backprop').disabled=!batch.length; }
-    async function predict(){ $('predict').disabled=true; $('log').textContent='Measuring ink in nine regions…'; const x=imageFeatures(); updateVisual(x); stage('draw-stage'); await sleep(500);stage('grid-stage');await sleep(520);stage('input-stage');
-      const z1=network.w1.map((w,i)=>dot(w,x,network.b1[i])), h1=z1.map(relu); updateVisual(x,h1);await sleep(540);stage('hidden1-stage');
-      const z2=network.w2.map((w,i)=>dot(w,h1,network.b2[i])), h2=z2.map(relu); updateVisual(x,h1,h2);await sleep(540);stage('hidden2-stage');
-      const z3=network.w3.map((w,i)=>dot(w,h2,network.b3[i])), p=softmax(z3); updateVisual(x,h1,h2,p);await sleep(540);stage('output-stage');await sleep(350);stage('truth-stage');
-      const y=+$('input[name=label]:checked').value, loss=-Math.log(Math.max(p[y],1e-8)); $('loss').textContent=loss.toFixed(3);stage('loss-stage'); batch.push({x,h1,h2,p,y,loss}); updateBatch();$('log').textContent=`Example added to the mini-batch (${batch.length}).`; $('predict').disabled=false;
+    function gradients(examples){
+      const g=Object.fromEntries(Object.entries(network).map(([k,v])=>[k,k[0]==='w'?v.map(r=>r.map(()=>0)):v.map(()=>0)]));
+      for(const ex of examples){
+        let dz=ex.p.map((p,i)=>p-(i===ex.y?1:0));
+        for(let l=3;l>=1;l--){
+          const input=l===3?ex.h2:l===2?ex.h1:ex.x;
+          dz.forEach((v,i)=>{
+            g['b'+l][i]+=v/examples.length;
+            input.forEach((a,j)=>g['w'+l][i][j]+=v*a/examples.length);
+          });
+          if(l>1) dz=input.map((a,j)=>a>0?network['w'+l].reduce((s,w,i)=>s+w[j]*dz[i],0):0);
+        }
+      }
+      return g;
     }
-    async function backprop(){ $('backprop').disabled=true;$('predict').disabled=true;$('log').textContent=`Backpropagating average error from ${batch.length} example${batch.length===1?'':'s'}…`; stage('loss-stage',true); await sleep(550); const g={w3:network.w3.map(r=>r.map(()=>0)),b3:[0,0],w2:network.w2.map(r=>r.map(()=>0)),b2:[0,0,0],w1:network.w1.map(r=>r.map(()=>0)),b1:Array(6).fill(0)};
-      for(const ex of batch){ const dz3=ex.p.map((v,i)=>v-(i===ex.y?1:0)); for(let i=0;i<2;i++){g.b3[i]+=dz3[i];for(let j=0;j<3;j++)g.w3[i][j]+=dz3[i]*ex.h2[j];} const dh2=ex.h2.map((v,j)=>network.w3.reduce((s,w,i)=>s+w[j]*dz3[i],0));const dz2=dh2.map((v,i)=>ex.h2[i]>0?v:0);for(let i=0;i<3;i++){g.b2[i]+=dz2[i];for(let j=0;j<6;j++)g.w2[i][j]+=dz2[i]*ex.h1[j];}const dh1=ex.h1.map((v,j)=>network.w2.reduce((s,w,i)=>s+w[j]*dz2[i],0));const dz1=dh1.map((v,i)=>ex.h1[i]>0?v:0);for(let i=0;i<6;i++){g.b1[i]+=dz1[i];for(let j=0;j<9;j++)g.w1[i][j]+=dz1[i]*ex.x[j];}}
-      const rate=.32/batch.length; function apply(W,G){W.forEach((r,i)=>r.forEach((v,j)=>W[i][j]-=rate*G[i][j]));} apply(network.w3,g.w3);network.b3.forEach((v,i)=>network.b3[i]-=rate*g.b3[i]);stage('output-stage',true);updateVisual(batch.at(-1).x,batch.at(-1).h1,batch.at(-1).h2,batch.at(-1).p);await sleep(600);apply(network.w2,g.w2);network.b2.forEach((v,i)=>network.b2[i]-=rate*g.b2[i]);stage('hidden2-stage',true);updateVisual(batch.at(-1).x,batch.at(-1).h1,batch.at(-1).h2,batch.at(-1).p);await sleep(600);apply(network.w1,g.w1);network.b1.forEach((v,i)=>network.b1[i]-=rate*g.b1[i]);stage('hidden1-stage',true);updateVisual(batch.at(-1).x,batch.at(-1).h1,batch.at(-1).h2,batch.at(-1).p);await sleep(600);stage('input-stage',true);await sleep(400);batch=[];updateBatch();$('log').textContent='Parameters updated. Draw and predict another example.';$('predict').disabled=false; }
-    $('predict').onclick=predict;$('backprop').onclick=backprop;$('clear').onclick=clear;document.querySelectorAll('input[name=label]').forEach(i=>i.onchange=()=>updateVisual(imageFeatures()));clear();updateBatch();
+    const fmt=v=>v===undefined?'—':v.toFixed(4);
+    function renderParams(){
+      for(let l=1;l<=3;l++){
+        const w=network['w'+l], b=network['b'+l];
+        const value=(v,d)=>{
+          const delta=d===undefined?'': '<small>Δ '+d.toExponential(2)+'</small>';
+          return '<td class="'+(d?'changed':'')+'">'+fmt(v)+delta+'</td>';
+        };
+        $('params'+l).innerHTML='<b>Layer '+l+' · all incoming weights and biases</b><div class="table-scroll"><table><thead><tr><th>Neuron</th>'+
+          w[0].map((_,j)=>'<th>w'+(j+1)+'</th>').join('')+'<th>bias</th></tr></thead><tbody>'+
+          w.map((row,i)=>'<tr><th>'+(l===3?['O','×'][i]:'h'+(i+1))+'</th>'+
+            row.map((v,j)=>value(v,changes?.['w'+l]?.[i]?.[j])).join('')+
+            value(b[i],changes?.['b'+l]?.[i])+'</tr>').join('')+'</tbody></table></div>';
+      }
+    }
+    function render(){
+      const x=view?.x||Array(9).fill(0);
+      $('pixels').innerHTML=x.map(v=>'<div class="pixel" style="background:rgb('+Array(3).fill(Math.round(255*(1-v))).join(',')+');color:'+(v>.5?'white':'#475569')+'">'+(v*100).toFixed(0)+'%</div>').join('');
+      [['inputs',x,9],['hidden1',view?.h1,6],['hidden2',view?.h2,3]].forEach(([id,a,n])=>{
+        $(id).innerHTML=Array.from({length:n},(_,i)=>'<div class="node"><b>'+(i+1)+'</b><span class="value">'+(a? a[i].toFixed(3):'—')+'</span></div>').join('');
+      });
+      $('scores').innerHTML=['O','×'].map((n,i)=>'<div class="score-row"><span>'+n+'</span><div class="score-bar" style="background:rgba(34,197,94,'+(.08+.82*(view?.p?.[i]||0))+')">'+(view?.p?(view.p[i]*100).toFixed(1)+'%':'—')+'</div></div>').join('');
+      const y=view?.y??label();
+      $('truth').innerHTML=['O','×'].map((n,i)=>'<div class="truth-row"><span>'+n+'</span><div class="truth-box" style="background:rgba(34,197,94,'+(i===y?.82:.08)+')">'+(i===y?1:0)+'</div></div>').join('');
+      $('loss').textContent=view?.loss===undefined?'—':view.loss.toFixed(4);
+      renderParams(); requestAnimationFrame(drawConnections);
+    }
+    function drawConnections(){
+      const svg=$('connections'), flow=document.querySelector('.flow'), rect=flow.getBoundingClientRect();
+      svg.setAttribute('viewBox','0 0 '+flow.scrollWidth+' '+flow.scrollHeight);
+      svg.style.width=flow.scrollWidth+'px';svg.style.height=flow.scrollHeight+'px';
+      let paths='';
+      [['inputs','hidden1',1],['hidden1','hidden2',2],['hidden2','scores',3]].forEach(([from,to,l])=>{
+        const source=[...$(from).children], target=[...$(to).children];
+        network['w'+l].forEach((row,i)=>row.forEach((w,j)=>{
+          const a=source[j].getBoundingClientRect(), b=target[i].getBoundingClientRect();
+          const x1=a.right-rect.left,y1=a.top+a.height/2-rect.top,x2=b.left-rect.left,y2=b.top+b.height/2-rect.top;
+          paths+='<path class="connection layer'+l+'" d="M '+x1+' '+y1+' C '+(x1+(x2-x1)*.45)+' '+y1+', '+(x2-(x2-x1)*.45)+' '+y2+', '+x2+' '+y2+'" fill="none" stroke="'+(w>=0?'#2563eb':'#a855f7')+'" stroke-width="'+(.5+4*Math.abs(w))+'"><title>Layer '+l+', source '+(j+1)+' → neuron '+(i+1)+': '+w.toFixed(6)+'</title></path>';
+        }));
+      });svg.innerHTML=paths;
+    }
+    async function stage(id,back=false,l=0){
+      const e=$(id);e.classList.add(back?'flash-back':'active');
+      const paths=[...document.querySelectorAll('.layer'+l)];
+      paths.forEach(p=>p.classList.add(back?'signal-back':'signal-forward'));
+      await sleep(600);
+      e.classList.remove('flash-back','active');paths.forEach(p=>p.classList.remove('signal-back','signal-forward'));
+    }
+    function lock(value){
+      busy=value;
+      document.querySelectorAll('button, input').forEach(e=>e.disabled=value);
+      $('backprop').disabled=value||!batch.length;
+    }
+    function updateBatch(){
+      $('batch-count').textContent=batch.length;
+      $('batch-loss').textContent='Average loss: '+(batch.length?(batch.reduce((s,e)=>s+e.loss,0)/batch.length).toFixed(4):'—');
+      $('batch-dots').innerHTML=Array.from({length:Math.min(20,Math.max(3,batch.length))},(_,i)=>'<i class="batch-dot '+(i<batch.length?'filled':'')+'"></i>').join('');
+    }
+    function imageFeatures(){
+      const data=ctx.getImageData(0,0,200,200).data,out=[];
+      for(let gy=0;gy<3;gy++)for(let gx=0;gx<3;gx++){
+        let ink=0,total=0;
+        for(let y=Math.floor(gy*200/3);y<Math.floor((gy+1)*200/3);y++)
+          for(let x=Math.floor(gx*200/3);x<Math.floor((gx+1)*200/3);x++){ink+=(255-data[(y*200+x)*4])/255;total++;}
+        out.push(ink/total);
+      }return out;
+    }
+    function clear(){
+      ctx.fillStyle='white';ctx.fillRect(0,0,200,200);view=null;render();
+    }
+    function point(e){const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*200/r.width,y:(e.clientY-r.top)*200/r.height};}
+    canvas.onpointerdown=e=>{
+      if(busy)return;drawing=true;last=point(e);canvas.setPointerCapture(e.pointerId);
+      ctx.fillStyle='black';ctx.beginPath();ctx.arc(last.x,last.y,8,0,Math.PI*2);ctx.fill();e.preventDefault();
+    };
+    canvas.onpointermove=e=>{
+      if(!drawing||busy)return;const p=point(e);
+      ctx.strokeStyle='black';ctx.lineWidth=16;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p;
+    };
+    canvas.onpointerup=canvas.onpointercancel=()=>drawing=false;
+    async function predict(){
+      if(busy)return;lock(true);drawing=false;changes=null;
+      try{
+        const ex=forward(imageFeatures(),label());
+        view={x:ex.x,y:ex.y};render();$('log').textContent='Forward pass…';
+        await stage('grid-stage');await stage('input-stage');
+        view.h1=ex.h1;render();await stage('hidden1-stage',false,1);
+        view.h2=ex.h2;render();await stage('hidden2-stage',false,2);
+        view.p=ex.p;render();await stage('output-stage',false,3);
+        await stage('truth-stage');view=ex;render();await stage('loss-stage');
+        batch.push(ex);updateBatch();$('log').textContent='Example added. Predict again to grow the batch, or backpropagate.';
+      }finally{lock(false);}
+    }
+    async function backprop(){
+      if(busy||!batch.length)return;
+      const lr=Number($('lr').value);
+      if(!Number.isFinite(lr)||lr<=0||lr>5){$('log').textContent='Choose a learning rate greater than 0 and at most 5.';return;}
+      lock(true);drawing=false;
+      try{
+        const before=batch.reduce((s,e)=>s+e.loss,0)/batch.length,g=gradients(batch);
+        changes={};let maxChange=0,count=0;
+        $('log').textContent='Computing gradients of the mean batch loss…';
+        await stage('loss-stage',true);
+        for(let l=3;l>=1;l--){
+          for(const k of ['w'+l,'b'+l]){
+            const update=(v,grad)=>{const d=-lr*grad;maxChange=Math.max(maxChange,Math.abs(d));if(d!==0)count++;return d;};
+            changes[k]=k[0]==='w'?network[k].map((row,i)=>row.map((v,j)=>update(v,g[k][i][j]))):network[k].map((v,i)=>update(v,g[k][i]));
+            if(k[0]==='w')network[k].forEach((row,i)=>row.forEach((v,j)=>network[k][i][j]+=changes[k][i][j]));
+            else network[k].forEach((v,i)=>network[k][i]+=changes[k][i]);
+          }
+          renderParams();drawConnections();
+          $('log').textContent='Layer '+l+': parameter ← parameter − '+lr+' × mean gradient';
+          await stage(l===3?'output-stage':l===2?'hidden2-stage':'hidden1-stage',true,l);
+        }
+        const after=batch.reduce((s,e)=>s+forward(e.x,e.y).loss,0)/batch.length;
+        const ex=batch.at(-1);view=forward(ex.x,ex.y);render();
+        $('training-result').textContent='Update '+(++updates)+' · '+count+'/89 parameters changed. Largest |Δ|: '+maxChange.toExponential(3)+'. Batch loss: '+before.toFixed(5)+' → '+after.toFixed(5)+'.';
+        $('log').textContent='Prediction refreshed using the new parameters. '+(after>before?'Loss increased; try a smaller learning rate.':'Zero gradients leave some parameters unchanged (ReLU).');
+        batch=[];updateBatch();
+      }finally{lock(false);}
+    }
+    $('predict').onclick=predict;$('backprop').onclick=backprop;$('clear').onclick=clear;
+    document.querySelectorAll('input[name=label]').forEach(e=>e.onchange=()=>{view=null;render();});
+    window.addEventListener('resize',drawConnections);
+    clear();updateBatch();
   </script>
 </body></html>
